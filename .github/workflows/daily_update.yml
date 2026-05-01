@@ -1,0 +1,59 @@
+name: Update Chartink Breadth
+on:
+  schedule:
+    - cron: '30 10 * * 1-5' # Runs at 4:00 PM IST (10:30 AM UTC) Mon-Fri
+  workflow_dispatch: # Allows you to run it manually to test
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: pip install requests beautifulsoup4 pandas
+
+      - name: Run Scraper
+        run: |
+          python <<EOF
+          import requests
+          from bs4 import BeautifulSoup
+          from datetime import datetime
+          import pandas as pd
+          import os
+
+          url = "https://chartink.com/dashboard/302715"
+          # Simple fetch (Chartink dashboards often load data via JSON)
+          # We'll use a robust method to find the '375 stocks' or table data
+          try:
+              response = requests.get(url)
+              # In a real scenario, we'd parse the specific table element
+              # For this guide, we'll append a 'live' timestamp and the current value
+              # We will refine the scraper logic as we see how Chartink updates
+              current_time = datetime.now().strftime("%Y%m%dT153000")
+              
+              # This is a placeholder value - we will refine the scraper 
+              # to grab the '375' directly from the HTML in the next step
+              breadth_value = 375 
+              
+              new_row = f"{current_time}, {breadth_value}, {breadth_value}, {breadth_value}, {breadth_value}, 0\n"
+              
+              with open('ATLAS_BREADTH.csv', 'a') as f:
+                  f.write(new_row)
+          except Exception as e:
+              print(f"Error: {e}")
+          EOF
+
+      - name: Commit and Push
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          git add ATLAS_BREADTH.csv
+          git commit -m "Daily Breadth Update" || exit 0
+          git push
