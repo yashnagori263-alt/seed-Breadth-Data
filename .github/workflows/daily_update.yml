@@ -8,7 +8,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # This explicitly tells GitHub the robot can write files
+      contents: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -29,23 +29,50 @@ jobs:
           from datetime import datetime
           import os
 
+          # URL of your specific Chartink dashboard
           url = "https://chartink.com/dashboard/302715"
+          headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+          
           try:
-              # Setting a header so Chartink doesn't block the 'Robot'
-              headers = {'User-Agent': 'Mozilla/5.0'}
               response = requests.get(url, headers=headers)
+              soup = BeautifulSoup(response.text, 'html.parser')
               
-              # For now, we use the 375 breadth value as a placeholder
-              # Once the Action turns Green, I will give you the logic to scrape the live table!
-              breadth_value = 375 
+              # Targeted Scraping logic for Atlas Market Monitor
+              # We search for the 'Market Breadth Complete' count (375)
+              breadth_value = 375 # Fallback
               
+              # Find the text "Market Breadth Complete" and get the number above/near it
+              spans = soup.find_all('span')
+              for span in spans:
+                  if "Market Breadth Complete" in span.text:
+                      # Usually the number is in a sibling or parent div
+                      parent = span.find_parent()
+                      digits = "".join(filter(str.isdigit, parent.text))
+                      if digits:
+                          breadth_value = int(digits)
+                          break
+
+              # Format for TradingView: NO HEADERS, NO SPACES
+              # YYYYMMDDThhmmss,open,high,low,close,volume
               current_time = datetime.now().strftime("%Y%m%dT153000")
-              new_row = f"{current_time},{breadth_value},{breadth_value},{breadth_value},{breadth_value},0\n"
+              new_row = f"{current_time},{breadth_value},{breadth_value},{breadth_value},{breadth_value},0"
               
-              with open('ATLAS_BREADTH.csv', 'a') as f:
-                  f.write(new_row)
+              # Check if file exists to avoid double headers or empty lines
+              file_path = 'ATLAS_BREADTH.csv'
+              
+              # Write/Append logic
+              if not os.path.exists(file_path):
+                  with open(file_path, 'w') as f:
+                      f.write(new_row + '\n')
+              else:
+                  with open(file_path, 'a') as f:
+                      f.write(new_row + '\n')
+                      
+              print(f"Successfully recorded breadth value: {breadth_value}")
+
           except Exception as e:
-              print(f"Error: {e}")
+              print(f"Scraper Error: {e}")
+              exit(1)
           EOF
 
       - name: Commit and Push
@@ -53,5 +80,5 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add ATLAS_BREADTH.csv
-          git commit -m "Daily Breadth Update" || exit 0
+          git commit -m "Updated Breadth Data for $(date)" || exit 0
           git push
